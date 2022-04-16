@@ -1,127 +1,206 @@
+# Start configuration added by Zim install {{{
 #
-# .zshrc
-#
-# @author Jeff Geerling
+# User configuration sourced by interactive shells
 #
 
-# Colors.
-unset LSCOLORS
-export CLICOLOR=1
-export CLICOLOR_FORCE=1
+# -----------------
+# Zsh configuration
+# -----------------
 
-# Don't require escaping globbing characters in zsh.
-unsetopt nomatch
+#
+# History
+#
 
-# Nicer prompt.
-export PS1=$'\n'"%F{green} %*%F %3~ %F{white}"$'\n'"$ "
+# Remove older command from the history if a duplicate is to be added.
+setopt HIST_IGNORE_ALL_DUPS
 
-# Enable plugins.
-plugins=(git brew history kubectl history-substring-search)
+#
+# Input/output
+#
 
-# Custom $PATH with extra locations.
-export PATH=$HOME/Library/Python/3.8/bin:/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:$HOME/bin:$HOME/go/bin:/usr/local/git/bin:$HOME/.composer/vendor/bin:$PATH
+# Set editor default keymap to emacs (`-e`) or vi (`-v`)
+bindkey -e
 
-# Bash-style time output.
-export TIMEFMT=$'\nreal\t%*E\nuser\t%*U\nsys\t%*S'
+# Prompt for spelling correction of commands.
+#setopt CORRECT
 
-# Include alias file (if present) containing aliases for ssh, etc.
-if [ -f ~/.aliases ]
-then
-  source ~/.aliases
+# Customize spelling correction prompt.
+#SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
+
+# Remove path separator from WORDCHARS.
+WORDCHARS=${WORDCHARS//[\/]}
+
+
+# --------------------
+# Module configuration
+# --------------------
+
+#
+# completion
+#
+
+# Set a custom path for the completion dump file.
+# If none is provided, the default ${ZDOTDIR:-${HOME}}/.zcompdump is used.
+#zstyle ':zim:completion' dumpfile "${ZDOTDIR:-${HOME}}/.zcompdump-${ZSH_VERSION}"
+
+#
+# git
+#
+
+# Set a custom prefix for the generated aliases. The default prefix is 'G'.
+zstyle ':zim:git' aliases-prefix 'g'
+
+#
+# input
+#
+
+# Append `../` to your input for each `.` you type after an initial `..`
+zstyle ':zim:input' double-dot-expand yes
+
+#
+# termtitle
+#
+
+# Set a custom terminal title format using prompt expansion escape sequences.
+# See http://zsh.sourceforge.net/Doc/Release/Prompt-Expansion.html#Simple-Prompt-Escapes
+# If none is provided, the default '%n@%m: %~' is used.
+zstyle ':zim:termtitle' format '%1~'
+
+#
+# zsh-autosuggestions
+#
+
+# Customize the style that the suggestions are shown with.
+# See https://github.com/zsh-users/zsh-autosuggestions/blob/master/README.md#suggestion-highlight-style
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'
+
+#
+# zsh-syntax-highlighting
+#
+
+# Set what highlighters will be used.
+# See https://github.com/zsh-users/zsh-syntax-highlighting/blob/master/docs/highlighters.md
+ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
+
+# Customize the main highlighter styles.
+# See https://github.com/zsh-users/zsh-syntax-highlighting/blob/master/docs/highlighters/main.md#how-to-tweak-it
+#typeset -A ZSH_HIGHLIGHT_STYLES
+#ZSH_HIGHLIGHT_STYLES[comment]='fg=10'
+#
+
+# Load these SSH identities
+zstyle ':zim:ssh' ids 'id_ed25519' 'github_ed25519' 'bitbucket_ed25519'
+
+# Use degit instead of git for modules
+zstyle ':zim:zmodule' use 'degit'
+
+
+# ------------------
+# Initialize modules
+# ------------------
+
+if [[ ${ZIM_HOME}/init.zsh -ot ${ZDOTDIR:-${HOME}}/.zimrc ]]; then
+  # Update static initialization script if it's outdated, before sourcing it
+  source ${ZIM_HOME}/zimfw.zsh init -q
+fi
+source ${ZIM_HOME}/init.zsh
+
+# ------------------------------
+# Post-init module configuration
+# ------------------------------
+
+#
+# zsh-history-substring-search
+#
+
+# Bind ^[[A/^[[B manually so up/down works both before and after zle-line-init
+bindkey '^[[A' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
+
+# Bind up and down keys
+zmodload -F zsh/terminfo +p:terminfo
+if [[ -n ${terminfo[kcuu1]} && -n ${terminfo[kcud1]} ]]; then
+  bindkey ${terminfo[kcuu1]} history-substring-search-up
+  bindkey ${terminfo[kcud1]} history-substring-search-down
 fi
 
-# Set architecture-specific brew share path.
-arch_name="$(uname -m)"
-if [ "${arch_name}" = "x86_64" ]; then
-    share_path="/usr/local/share"
-elif [ "${arch_name}" = "arm64" ]; then
-    share_path="/opt/homebrew/share"
-else
-    echo "Unknown architecture: ${arch_name}"
+bindkey '^P' history-substring-search-up
+bindkey '^N' history-substring-search-down
+bindkey -M vicmd 'k' history-substring-search-up
+bindkey -M vicmd 'j' history-substring-search-down
+# }}} End configuration added by Zim install
+
+ZSH_AUTOSUGGEST_USE_ASYNC=true
+
+# dont share commands across shells
+unsetopt SHARE_HISTORY
+
+# custom by srothe
+zprompt_theme='s1ck94'
+
+# disable audible bell
+unsetopt beep
+
+# Tell the terminal about the working directory whenever it changes.
+# [[ "$TERM_PROGRAM" == "Apple_Terminal/Hyper" ]]
+if [[ -z "$INSIDE_EMACS" ]]; then
+
+    update_terminal_cwd() {
+        # Identify the directory using a "file:" scheme URL, including
+        # the host name to disambiguate local vs. remote paths.
+
+        # Percent-encode the pathname.
+        local URL_PATH=''
+        {
+            # Use LC_CTYPE=C to process text byte-by-byte.
+            local i ch hexch LC_CTYPE=C
+            for ((i = 1; i <= ${#PWD}; ++i)); do
+                ch="$PWD[i]"
+                if [[ "$ch" =~ [/._~A-Za-z0-9-] ]]; then
+                    URL_PATH+="$ch"
+                else
+                    hexch=$(printf "%02X" "'$ch")
+                    URL_PATH+="%$hexch"
+                fi
+            done
+        }
+
+        local PWD_URL="file://$HOST$URL_PATH"
+        #echo "$PWD_URL"        # testing
+        printf '\e]7;%s\a' "$PWD_URL"
+    }
+
+    # Register the function so it is called whenever the working
+    # directory changes.
+    autoload add-zsh-hook
+    add-zsh-hook chpwd update_terminal_cwd
+
+    # Tell the terminal about the initial directory.
+    update_terminal_cwd
 fi
 
-# Allow history search via up/down keys.
-source ${share_path}/zsh-history-substring-search/zsh-history-substring-search.zsh
-bindkey "^[[A" history-substring-search-up
-bindkey "^[[B" history-substring-search-down
+# enable solarized dark dircolors theme
+#eval `dircolors $HOME/.dircolors/dircolors.256dark`
 
-# Git aliases.
-alias gs='git status'
-alias gc='git commit'
-alias gp='git pull --rebase'
-alias gcam='git commit -am'
-alias gl='git log --graph --pretty=format:"%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset" --abbrev-commit'
+# Install `trash` first — brew install trash
+alias rm=trash
 
-# Completions.
-autoload -Uz compinit && compinit
-# Case insensitive.
-zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}' 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} l:|=* r:|=*' 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} l:|=* r:|=*' 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} l:|=* r:|=*'
+alias pdfshrink=`echo "/usr/local/bin/gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook -dNOPAUSE -dBATCH  -dQUIET -sOutputFile=output.pdf"`
 
-# Git upstream branch syncer.
-# Usage: gsync master (checks out master, pull upstream, push origin).
-function gsync() {
- if [[ ! "$1" ]] ; then
-     echo "You must supply a branch."
-     return 0
- fi
-
- BRANCHES=$(git branch --list $1)
- if [ ! "$BRANCHES" ] ; then
-    echo "Branch $1 does not exist."
-    return 0
- fi
-
- git checkout "$1" && \
- git pull upstream "$1" && \
- git push origin "$1"
+# Put this in your .zshrc or .bashrc file
+# Install `tree` first — brew install tree
+function t() {
+  # Defaults to 3 levels deep, do more with `t 5` or `t 1`
+  # pass additional args after
+  tree -I '.git|node_modules|bower_components|.DS_Store' --dirsfirst --filelimit 15 -L ${1:-3} -aC $2
 }
 
-# Tell homebrew to not autoupdate every single time I run it (just once a week).
-export HOMEBREW_AUTO_UPDATE_SECS=604800
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-# Super useful Docker container oneshots.
-# Usage: dockrun, or dockrun [centos7|fedora27|debian9|debian8|ubuntu1404|etc.]
-dockrun() {
- docker run -it geerlingguy/docker-"${1:-ubuntu1604}"-ansible /bin/bash
-}
+[ -f ~/.zshrc.jenv ] && source ~/.zshrc.jenv
 
-# Enter a running Docker container.
-function denter() {
- if [[ ! "$1" ]] ; then
-     echo "You must supply a container ID or name."
-     return 0
- fi
+#source ~/.zshrc.rbenv
 
- docker exec -it $1 bash
- return 0
-}
-
-# Delete a given line number in the known_hosts file.
-knownrm() {
- re='^[0-9]+$'
- if ! [[ $1 =~ $re ]] ; then
-   echo "error: line number missing" >&2;
- else
-   sed -i '' "$1d" ~/.ssh/known_hosts
- fi
-}
-
-# Allow Composer to use almost as much RAM as Chrome.
-export COMPOSER_MEMORY_LIMIT=-1
-
-# Ask for confirmation when 'prod' is in a command string.
-#prod_command_trap () {
-#  if [[ $BASH_COMMAND == *prod* ]]
-#  then
-#    read -p "Are you sure you want to run this command on prod [Y/n]? " -n 1 -r
-#    if [[ $REPLY =~ ^[Yy]$ ]]
-#    then
-#      echo -e "\nRunning command \"$BASH_COMMAND\" \n"
-#    else
-#      echo -e "\nCommand was not run.\n"
-#      return 1
-#    fi
-#  fi
-#}
-#shopt -s extdebug
-#trap prod_command_trap DEBUG
+#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+export SDKMAN_DIR="/Users/srothe/.sdkman"
+[[ -s "/Users/srothe/.sdkman/bin/sdkman-init.sh" ]] && source "/Users/srothe/.sdkman/bin/sdkman-init.sh"
